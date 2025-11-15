@@ -1,0 +1,130 @@
+version: "3.9"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16
+    container_name: dropmate-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: dropmate
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./schema:/docker-entrypoint-initdb.d/schema
+    networks:
+      - dropmate-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for pub/sub
+  redis:
+    image: redis:7-alpine
+    container_name: dropmate-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - dropmate-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Core API Service
+  core-api:
+    build:
+      context: ./services/core-api
+      dockerfile: Dockerfile
+    container_name: dropmate-core-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgresql://postgres:admin123@db:5432/dropmate
+      JWT_SECRET: supersecret
+      NODE_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dropmate-network
+    volumes:
+      - ./services/core-api/src:/app/src
+
+  # Location Service
+  location-service:
+    build:
+      context: ./services/location-service
+      dockerfile: Dockerfile
+    container_name: dropmate-location-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      PORT: 8081
+      DATABASE_URL: postgresql://postgres:admin123@db:5432/dropmate
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dropmate-network
+    volumes:
+      - ./services/location-service/src:/app/src
+
+  # Notification Service (WebSocket)
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: dropmate-notification-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: 8082
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: "*"
+      NODE_ENV: development
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dropmate-network
+    volumes:
+      - ./services/notification-service/src:/app/src
+
+  # pgAdmin UI (optional)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: dropmate-pgadmin
+    restart: always
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PYTHONWARNINGS: "ignore"
+    depends_on:
+      - db
+    networks:
+      - dropmate-network
+
+networks:
+  dropmate-network:
+    driver: bridge
+
+volumes:
+  db_data:

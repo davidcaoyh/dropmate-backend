@@ -9,6 +9,7 @@ import db from "./models/db.js";
 import orderRoutes from "./routes/orders.js";
 import driverRoutes from "./routes/drivers.js";
 import messageRoutes from "./routes/messages.js";
+import userRoutes from "./routes/users.js";
 
 dotenv.config();
 const app = express();
@@ -21,6 +22,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/drivers", driverRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/users", userRoutes);
 
 // Setup WebSocket
 const httpServer = createServer(app);

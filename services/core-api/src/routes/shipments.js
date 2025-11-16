@@ -108,4 +108,21 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
+// GET /api/shipments/:id/events - get shipment status history
+router.get("/:id/events", async (req, res) => {
+  try {
+    const db = (await import("../models/db.js")).default;
+    const result = await db.query(
+      `SELECT * FROM shipment_events
+       WHERE shipment_id = $1
+       ORDER BY occurred_at DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch shipment events" });
+  }
+});
+
 export default router;

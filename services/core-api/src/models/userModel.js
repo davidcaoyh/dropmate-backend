@@ -1,4 +1,6 @@
 import db from './db.js';
+import { createOrder } from './orderModel.js';
+import { createShipment } from './shipmentsModel.js';
 
 /**
  * Get user profile with customer/driver info
@@ -116,7 +118,6 @@ export async function getUserShipmentById(userId, shipmentId) {
             d.id as driver_id, d.name as driver_name,
             d.vehicle_type, d.license_number,
             d.status as driver_status,
-            d.phone as driver_phone,
             (SELECT json_build_object(
                 'latitude', dle.latitude,
                 'longitude', dle.longitude,
@@ -182,6 +183,49 @@ export async function getUserStats(userId) {
       total_spent: 0
     };
   }
+
+  return result.rows[0];
+}
+
+/**
+ * Create a new shipment/package for the user
+ * @param {number} userId - The user ID
+ * @param {Object} shipmentData - Shipment details
+ * @param {string} shipmentData.pickupAddress - Pickup address
+ * @param {string} shipmentData.deliveryAddress - Delivery address
+ * @param {number} [shipmentData.totalAmount] - Optional total amount
+ * @returns {Promise<Object>} The created shipment with full details
+ */
+export async function createUserShipment(userId, { pickupAddress, deliveryAddress, totalAmount = 0 }) {
+  // Get the customer ID for this user
+  const customerResult = await db.query(
+    'SELECT id FROM customers WHERE user_id = $1',
+    [userId]
+  );
+
+  if (customerResult.rows.length === 0) {
+    throw new Error('Customer profile not found for this user');
+  }
+
+  const customerId = customerResult.rows[0].id;
+
+  // Create an order for this customer
+  const order = await createOrder(customerId, totalAmount);
+
+  // Create a shipment for this order (with userId for event logging)
+  const shipment = await createShipment(order.id, pickupAddress, deliveryAddress, userId);
+
+  // Return the shipment with full details
+  const result = await db.query(
+    `SELECT s.id, s.tracking_number, s.status,
+            s.pickup_address, s.delivery_address,
+            s.created_at, s.updated_at,
+            o.id as order_id, o.total_amount, o.status as order_status
+     FROM shipments s
+     JOIN orders o ON o.id = s.order_id
+     WHERE s.id = $1`,
+    [shipment.id]
+  );
 
   return result.rows[0];
 }

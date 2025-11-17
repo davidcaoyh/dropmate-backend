@@ -108,17 +108,23 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
-// GET /api/shipments/:id/events - get shipment status history
+// GET /api/shipments/:id/events - get shipment status history (admin view)
 router.get("/:id/events", async (req, res) => {
   try {
-    const db = (await import("../models/db.js")).default;
-    const result = await db.query(
-      `SELECT * FROM shipment_events
-       WHERE shipment_id = $1
-       ORDER BY occurred_at DESC`,
-      [req.params.id]
-    );
-    res.json(result.rows);
+    const { getShipmentEvents } = await import("../models/shipmentEventsModel.js");
+    const includeLocationUpdates = req.query.includeLocationUpdates === 'true';
+    const limit = parseInt(req.query.limit) || 100;
+
+    const events = await getShipmentEvents(req.params.id, {
+      limit,
+      includeLocationUpdates
+    });
+
+    res.json({
+      shipmentId: parseInt(req.params.id),
+      count: events.length,
+      events
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch shipment events" });

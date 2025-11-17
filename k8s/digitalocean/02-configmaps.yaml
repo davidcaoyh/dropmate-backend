@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: dropmate
+data:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+
+  # Service URLs (internal cluster communication)
+  CORE_API_URL: "http://core-api:8080"
+  LOCATION_SERVICE_URL: "http://location-service:8081"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:8082"
+
+  # Database config
+  DB_POOL_MIN: "2"
+  DB_POOL_MAX: "10"
+
+  # CORS origin - UPDATE with your frontend URL
+  CORS_ORIGIN: "*"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: dropmate
+data:
+  init.sql: |
+    -- Database initialization script
+    -- This runs when the database is first created
+
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+    -- Note: Your actual schema will be initialized by migrations
+    -- This is just for extensions and basic setup

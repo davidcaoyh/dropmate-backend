@@ -16,6 +16,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "healthy", service: "core-api" });
+});
+
 // REST routes
 app.use("/api/shipments", shipmentRoutes);
 app.use("/api/auth", authRoutes);

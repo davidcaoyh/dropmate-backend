@@ -1,0 +1,14 @@
+# Never commit generated secrets!
+*-secrets-generated.yaml
+01-secrets-generated.yaml
+
+# Kubeconfig files
+*.kubeconfig
+
+# Backup files
+*.backup
+*.sql
+
+# Temporary files
+*.tmp
+*.log

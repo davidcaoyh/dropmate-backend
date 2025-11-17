@@ -42,7 +42,7 @@ spec:
               mountPath: /var/lib/postgresql/data
               subPath: pgdata
             - name: initdb-sql
-              mountPath: /docker-entrypoint-initdb.d/schema
+              mountPath: /docker-entrypoint-initdb.d
               readOnly: true
       volumes:
         - name: initdb-sql

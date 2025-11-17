@@ -114,3 +114,53 @@ export async function optionalAuth(req, res, next) {
 
   return authenticateFirebase(req, res, next);
 }
+
+/**
+ * Middleware to verify user has 'customer' role
+ * Must be used after authenticateFirebase
+ *
+ * Usage:
+ *   router.post('/shipments', authenticateFirebase, requireCustomer, handler);
+ */
+export function requireCustomer(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Authentication required'
+    });
+  }
+
+  if (req.user.role !== 'customer') {
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'This endpoint is only accessible to customers'
+    });
+  }
+
+  next();
+}
+
+/**
+ * Middleware to verify user has 'driver' role
+ * Must be used after authenticateFirebase
+ *
+ * Usage:
+ *   router.get('/available-packages', authenticateFirebase, requireDriver, handler);
+ */
+export function requireDriver(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Authentication required'
+    });
+  }
+
+  if (req.user.role !== 'driver') {
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'This endpoint is only accessible to drivers'
+    });
+  }
+
+  next();
+}

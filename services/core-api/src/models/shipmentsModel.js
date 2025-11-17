@@ -77,10 +77,66 @@ export async function assignDriverToShipment(shipmentId, driverId) {
   return result.rows[0];
 }
 
-export async function updateShipmentStatus(id, status) {
+export async function updateShipmentStatus(id, status, userId = null) {
+  // Get current status before updating
+  const currentResult = await db.query(
+    "SELECT status FROM shipments WHERE id=$1",
+    [id]
+  );
+  const fromStatus = currentResult.rows[0]?.status;
+
+  // Update the status
   const result = await db.query(
     "UPDATE shipments SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING *",
     [status, id]
   );
+
+  // Log the status change event
+  if (result.rows[0] && fromStatus !== status) {
+    const { logStatusChange } = await import('./shipmentEventsModel.js');
+    await logStatusChange(id, fromStatus, status, userId);
+  }
+
+  return result.rows[0];
+}
+
+/**
+ * Generate a unique tracking number
+ * Format: DM-YYYYMMDD-XXXXXX (DM = DropMate)
+ */
+function generateTrackingNumber() {
+  const date = new Date();
+  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `DM-${dateStr}-${random}`;
+}
+
+/**
+ * Create a new shipment
+ * @param {number} orderId - The order ID
+ * @param {string} pickupAddress - Pickup address
+ * @param {string} deliveryAddress - Delivery address
+ * @returns {Promise<Object>} The created shipment
+ */
+export async function createShipment(orderId, pickupAddress, deliveryAddress, userId = null) {
+  const trackingNumber = generateTrackingNumber();
+
+  const result = await db.query(
+    `INSERT INTO shipments (order_id, tracking_number, pickup_address, delivery_address, status)
+     VALUES ($1, $2, $3, $4, 'pending')
+     RETURNING *`,
+    [orderId, trackingNumber, pickupAddress, deliveryAddress]
+  );
+
+  // Log shipment creation event
+  if (result.rows[0]) {
+    const { logShipmentCreated } = await import('./shipmentEventsModel.js');
+    await logShipmentCreated(result.rows[0].id, userId, {
+      pickup_address: pickupAddress,
+      delivery_address: deliveryAddress,
+      tracking_number: trackingNumber
+    });
+  }
+
   return result.rows[0];
 }

@@ -1,0 +1,189 @@
+# Cost-Optimized Configuration: Single Ingress instead of 3 LoadBalancers
+# This saves $24/month (2 LoadBalancers @ $12/mo each)
+#
+# OPTION 1: Use this file instead of separate LoadBalancers in 05, 06, 07
+# OPTION 2: Keep LoadBalancers for simpler setup (no domain required)
+
+# First, install nginx-ingress controller:
+# kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/cloud/deploy.yaml
+
+---
+# Internal ClusterIP Services (instead of LoadBalancers)
+apiVersion: v1
+kind: Service
+metadata:
+  name: core-api
+  namespace: dropmate
+  labels:
+    app: core-api
+spec:
+  type: ClusterIP  # Changed from LoadBalancer
+  selector:
+    app: core-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: location-service
+  namespace: dropmate
+  labels:
+    app: location-service
+spec:
+  type: ClusterIP  # Changed from LoadBalancer
+  selector:
+    app: location-service
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: dropmate
+  labels:
+    app: notification-service
+spec:
+  type: ClusterIP  # Changed from LoadBalancer
+  sessionAffinity: ClientIP  # Important for WebSocket
+  selector:
+    app: notification-service
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+      protocol: TCP
+---
+# Single Ingress routing to all services
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dropmate-ingress
+  namespace: dropmate
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+    # WebSocket support for notification service
+    nginx.ingress.kubernetes.io/websocket-services: "notification-service"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+    # CORS settings
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"  # UPDATE with your frontend domain
+spec:
+  tls:
+    - hosts:
+        - dropmate.yourdomain.com  # UPDATE with your domain
+      secretName: dropmate-tls-cert
+  rules:
+    - host: dropmate.yourdomain.com  # UPDATE with your domain
+      http:
+        paths:
+          # Core API routes
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: core-api
+                port:
+                  number: 8080
+
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: core-api
+                port:
+                  number: 8080
+
+          # Location Service routes
+          - path: /api/location
+            pathType: Prefix
+            backend:
+              service:
+                name: location-service
+                port:
+                  number: 8081
+
+          # WebSocket for Notification Service
+          - path: /socket.io
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8082
+
+          - path: /notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8082
+---
+# Alternative: Multi-domain Ingress (if you want separate subdomains)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dropmate-ingress-multi-domain
+  namespace: dropmate
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/websocket-services: "notification-service"
+spec:
+  tls:
+    - hosts:
+        - api.dropmate.com           # UPDATE
+        - location.dropmate.com      # UPDATE
+        - ws.dropmate.com            # UPDATE
+      secretName: dropmate-multi-tls
+  rules:
+    # Core API
+    - host: api.dropmate.com  # UPDATE
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: core-api
+                port:
+                  number: 8080
+
+    # Location Service
+    - host: location.dropmate.com  # UPDATE
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: location-service
+                port:
+                  number: 8081
+
+    # Notification Service (WebSocket)
+    - host: ws.dropmate.com  # UPDATE
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8082
